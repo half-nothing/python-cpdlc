@@ -1,0 +1,19 @@
+[project]
+name = "python-cpdlc"
+version = "1.0.0"
+description = "A python lib for easier use of cpdlc"
+authors = [
+    { name = "Half_nothing", email = "Half_nothing@163.com" },
+]
+dependencies = ["setuptools>=80.9.0", "loguru>=0.7.3", "requests>=2.32.4"]
+requires-python = ">=3.12"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.pdm]
+distribution = true
