@@ -13,6 +13,10 @@ from .exception import CallsignError, LoginCodeError
 
 
 def parser_message(text: str) -> list["AcarsMessage"]:
+    """
+    parse acars message
+    :param text: acars message
+    """
     result: list["AcarsMessage"] = []
     messages = AcarsMessage.split_pattern.findall(text)
     for message in messages:
@@ -31,8 +35,17 @@ class CPDLC:
     def __init__(self, email: str, login_code: str, acars_url: str = "http://www.hoppie.nl/acars/system", *,
                  cpdlc_connect_callback: Optional[Callable[[], None]] = None,
                  cpdlc_disconnect_callback: Optional[Callable[[], None]] = None):
+        """
+        CPDLC Client
+        :param email: email address
+        :param login_code: hoppie login code
+        :param acars_url: custom hoppie acars system url
+        :param cpdlc_connect_callback: callback when cpdlc connected
+        :param cpdlc_disconnect_callback: callback when cpdlc disconnected
+        """
         self.login_code = login_code
         self.email = email
+        self.acars_url = acars_url
         self.network = self.get_network()
         self.callsign: Optional[str] = None
         self.poller: AdaptivePoller = AdaptivePoller(self.poll_message)
@@ -42,7 +55,6 @@ class CPDLC:
         self.cpdlc_atc_callsign: Optional[str] = None
         self.cpdlc_connect_callback = cpdlc_connect_callback
         self.cpdlc_disconnect_callback = cpdlc_disconnect_callback
-        self.acars_url = acars_url
         logger.debug(f"CPDLC init complete. Connection OK. Current network: {self.network.value}")
 
     def add_message_callback(self, callback: Callable[[AcarsMessage], None]) -> None:
@@ -57,7 +69,8 @@ class CPDLC:
         self.cpdlc_current_atc = None
         self.cpdlc_atc_callsign = None
         logger.debug(f"CPDLC disconnected")
-        self.cpdlc_disconnect_callback()
+        if self.cpdlc_disconnect_callback is not None:
+            self.cpdlc_disconnect_callback()
 
     def handle_message(self, message: AcarsMessage):
         logger.debug(f"Received message: {message}")
@@ -109,6 +122,7 @@ class CPDLC:
             "logon": self.login_code,
             "network": new_network.value
         })
+        self.network = new_network
         logger.debug(f"Network changed to {new_network.value}")
 
     def set_callsign(self, callsign: str):
