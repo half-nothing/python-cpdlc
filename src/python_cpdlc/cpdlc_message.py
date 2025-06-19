@@ -1,3 +1,6 @@
+from datetime import datetime
+from hashlib import md5
+
 from .acars_message import AcarsMessage
 from .cpdlc_message_id import message_id_manager as mim
 from .enums import PacketType, ReplyTag
@@ -13,6 +16,7 @@ class CPDLCMessage(AcarsMessage):
         self.replay_id = int(data[3]) if data[3] != "" else 0
         self.replay_type = ReplyTag(data[4])
         self.message = data[5].removesuffix("}")
+        self.replied = False
         mim.update_message_id(self.message_id)
 
     @property
@@ -24,6 +28,7 @@ class CPDLCMessage(AcarsMessage):
         return self.replay_type == ReplyTag.NOT_REQUIRED
 
     def reply_message(self, status: bool) -> str:
+        self.replied = True
         match self.replay_type:
             case ReplyTag.WILCO_UNABLE:
                 return f"/data2/{mim.next_message_id()}/{self.message_id}/N/{'WILCO' if status else 'UNABLE'}"
