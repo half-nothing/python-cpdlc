@@ -4,8 +4,8 @@ from .enums import PacketType
 
 
 class AcarsMessage:
-    split_pattern = compile(r"\{.*?\{.*?}}|\{.*?}")
-    data_pattern = compile(r"\{.*?}")
+    split_pattern = compile(r"\{[\s\S]*?\{[\s\S]*?}}|\{[\s\S]*?}")
+    data_pattern = compile(r"\{[\s\S]*?}")
 
     def __init__(self, from_station: str, msg_type: PacketType, message: str):
         self.from_station = from_station
