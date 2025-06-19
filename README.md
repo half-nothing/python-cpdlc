@@ -30,7 +30,10 @@ async def main():
     
     # Start poll thread for message reveiver
     # If you dont call this function you cant receive message
-    await cpdlc.start_poller()
+    cpdlc.start_poller()
+    # You can also use Thread to start and I recommend this method
+    # If you use this lib on a GUI program
+    # Thread(target=cpdlc.start_poller, daemon=True).start()
     
     # send login request
     cpdlc.cpdlc_login("ZSHA")
