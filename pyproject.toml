@@ -1,6 +1,6 @@
 [project]
 name = "python-cpdlc"
-version = "1.2.0"
+version = "1.2.1"
 description = "A simple CPDLC client"
 authors = [
     { name = "Half_nothing", email = "Half_nothing@163.com" },

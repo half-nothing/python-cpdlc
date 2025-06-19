@@ -223,11 +223,11 @@ class CPDLC:
         res = post(f"{self.acars_url}/connect.html", {
             "logon": self.login_code,
             "from": self.callsign,
-            "to": message.from_station,
+            "to": message.station,
             "type": PacketType.CPDLC.value,
             "packet": reply
         })
-        self.call_message_sender_callback(message.from_station, reply.split("/")[-1])
+        self.call_message_sender_callback(message.station, reply.split("/")[-1])
         return res.text == "ok"
 
     def cpdlc_login(self, target_station: str) -> bool:

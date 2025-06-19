@@ -5,8 +5,8 @@ from .exception import CantReplyError
 
 
 class CPDLCMessage(AcarsMessage):
-    def __init__(self, from_station: str, msg_type: PacketType, message: str):
-        super().__init__(from_station, msg_type, message)
+    def __init__(self, station: str, msg_type: PacketType, message: str):
+        super().__init__(station, msg_type, message)
         data = self.message.split("/")
         self.data_tag = data[1]
         self.message_id = int(data[2])
@@ -38,7 +38,7 @@ class CPDLCMessage(AcarsMessage):
 
     def __str__(self) -> str:
         return ("CPDLCMessage{"
-                f"from={self.from_station},"
+                f"from={self.station},"
                 f"type={self.msg_type},"
                 f"message_id={self.message_id},"
                 f"replay_id={self.replay_id},"

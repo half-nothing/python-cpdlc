@@ -41,3 +41,8 @@ class ReplyTag(Enum):
     AFFIRM_NEGATIVE = "AN"
     ROGER = "R"
     NOT_REQUIRED = "NE"
+
+
+class MessageDirection(Enum):
+    IN = "IN"
+    OUT = "OUT"
