@@ -2,6 +2,8 @@ import asyncio
 from random import randint
 from typing import Callable, Optional
 
+from loguru import logger
+
 
 class AdaptivePoller:
     def __init__(
@@ -26,10 +28,8 @@ class AdaptivePoller:
         self.task: Optional[asyncio.Task] = None
 
     async def _polling_loop(self):
-        """轮询主循环"""
         while self.is_running:
             interval = randint(self.min_normal_interval, self.max_normal_interval)
-
             try:
                 await asyncio.sleep(interval)
                 if self.is_running:
@@ -37,17 +37,17 @@ class AdaptivePoller:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"轮询异常: {e}")
+                print(f"Error: {e}")
 
-    async def start(self):
-        """启动轮询器（异步方法）"""
+    def start(self):
         if not self.is_running:
+            logger.debug(f"Poll thread started")
             self.is_running = True
-            self.task = asyncio.create_task(self._polling_loop())
+            self.task = asyncio.run(self._polling_loop())
 
     async def stop(self):
-        """停止轮询器（异步方法）"""
         if self.is_running and self.task:
+            logger.debug(f"Poll thread stopped")
             self.is_running = False
             self.task.cancel()
             try:

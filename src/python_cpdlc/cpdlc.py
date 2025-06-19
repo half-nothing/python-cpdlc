@@ -60,9 +60,11 @@ class CPDLC:
     def add_message_callback(self, callback: Callable[[AcarsMessage], None]) -> None:
         self.callback.append(callback)
 
-    async def start_poller(self):
-        logger.debug(f"Poll thread started")
-        await self.poller.start()
+    def start_poller(self):
+        self.poller.start()
+
+    async def stop_poller(self):
+        await self.poller.stop()
 
     def _cpdlc_logout(self):
         self.cpdlc_connect = False

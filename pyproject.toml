@@ -1,12 +1,11 @@
 [project]
 name = "python-cpdlc"
-version = "1.0.2"
+version = "1.0.3"
 description = "A simple CPDLC client"
 authors = [
     { name = "Half_nothing", email = "Half_nothing@163.com" },
 ]
 dependencies = [
-    "setuptools>=80.9.0",
     "loguru>=0.7.3",
     "requests>=2.32.4",
     "beautifulsoup4>=4.13.4",
