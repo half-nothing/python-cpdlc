@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 from bs4 import BeautifulSoup
 from loguru import logger
@@ -9,7 +9,7 @@ from .adaptive_poller import AdaptivePoller
 from .cpdlc_message import CPDLCMessage
 from .cpdlc_message_id import message_id_manager
 from .enums import InfoType, Network, PacketType
-from .exception import CallsignError, LoginCodeError
+from .exception import CallsignError, LoginCodeError, ResponseError
 
 
 def parser_message(text: str) -> list["AcarsMessage"]:
@@ -34,6 +34,7 @@ def parser_message(text: str) -> list["AcarsMessage"]:
 class CPDLC:
     def __init__(self, email: str, login_code: str, acars_url: str = "http://www.hoppie.nl/acars/system", *,
                  cpdlc_connect_callback: Optional[Callable[[], None]] = None,
+                 cpdlc_atc_info_update_callback: Optional[Callable[[], None]] = None,
                  cpdlc_disconnect_callback: Optional[Callable[[], None]] = None):
         """
         CPDLC Client
@@ -49,16 +50,41 @@ class CPDLC:
         self.network = self.get_network()
         self.callsign: Optional[str] = None
         self.poller: AdaptivePoller = AdaptivePoller(self.poll_message)
-        self.callback: list[Callable[[AcarsMessage], None]] = []
+        self.message_receiver_callbacks: list[Callable[[AcarsMessage], None]] = []
+        self.message_sender_callbacks: list[Callable[[str, str], None]] = []
         self.cpdlc_connect = False
         self.cpdlc_current_atc: Optional[str] = None
         self.cpdlc_atc_callsign: Optional[str] = None
         self.cpdlc_connect_callback = cpdlc_connect_callback
+        self.cpdlc_atc_info_update_callback = cpdlc_atc_info_update_callback
         self.cpdlc_disconnect_callback = cpdlc_disconnect_callback
         logger.debug(f"CPDLC init complete. Connection OK. Current network: {self.network.value}")
 
-    def add_message_callback(self, callback: Callable[[AcarsMessage], None]) -> None:
-        self.callback.append(callback)
+    def message_receiver_callback(self):
+        def wrapper(func):
+            self.message_receiver_callbacks.append(func)
+
+        return wrapper
+
+    def add_message_receiver_callback(self, callback: Callable[[AcarsMessage], None]) -> None:
+        self.message_receiver_callbacks.append(callback)
+
+    def call_message_receiver_callback(self, message: AcarsMessage) -> None:
+        for callback in self.message_receiver_callbacks:
+            callback(message)
+
+    def message_sender_callback(self):
+        def wrapper(func):
+            self.message_sender_callbacks.append(func)
+
+        return wrapper
+
+    def add_message_sender_callback(self, callback: Callable[[str, str], None]) -> None:
+        self.message_sender_callbacks.append(callback)
+
+    def call_message_sender_callback(self, to: str, message: str) -> None:
+        for callback in self.message_sender_callbacks:
+            callback(to, message)
 
     def start_poller(self):
         self.poller.start()
@@ -74,7 +100,7 @@ class CPDLC:
         if self.cpdlc_disconnect_callback is not None:
             self.cpdlc_disconnect_callback()
 
-    def handle_message(self, message: AcarsMessage):
+    def handle_message(self, message: Union[AcarsMessage]):
         logger.debug(f"Received message: {message}")
         if isinstance(message, CPDLCMessage):
             if message.message == "LOGON ACCEPTED":
@@ -89,6 +115,8 @@ class CPDLC:
                 self.cpdlc_current_atc = info[1]
                 self.cpdlc_atc_callsign = info[2]
                 logger.success(f"ATC Unit: {self.cpdlc_current_atc}. Callsign: {self.cpdlc_atc_callsign}")
+                if self.cpdlc_atc_info_update_callback is not None:
+                    self.cpdlc_atc_info_update_callback()
             if message.message == "LOGOFF":
                 self._cpdlc_logout()
 
@@ -102,8 +130,7 @@ class CPDLC:
         messages = parser_message(res.text)
         for message in messages:
             self.handle_message(message)
-            for callback in self.callback:
-                callback(message)
+            self.call_message_receiver_callback(message)
 
     def get_network(self) -> Network:
         res = post(f"{self.acars_url}/account.html", {
@@ -158,7 +185,11 @@ class CPDLC:
             "type": PacketType.INFO_REQ.value,
             "packet": f"{info_type.value} {icao}"
         })
-        return parser_message(res.text)[0]
+        data = parser_message(res.text)
+        if len(data) != 1:
+            raise ResponseError()
+        self.call_message_receiver_callback(data[0])
+        return data[0]
 
     def send_telex_message(self, target_station: str, message: str) -> bool:
         if self.callsign is None:
@@ -171,6 +202,7 @@ class CPDLC:
             "type": PacketType.TELEX.value,
             "packet": message
         })
+        self.call_message_sender_callback(target_station.upper(), message)
         return res.text == "ok"
 
     def departure_clearance_delivery(self, target_station: str, aircraft_type: str, dest_airport: str, dep_airport: str,
@@ -187,13 +219,15 @@ class CPDLC:
         if self.callsign is None:
             raise CallsignError()
         logger.debug(f"Reply CPDLC message with status {status}")
+        reply = message.reply_message(status)
         res = post(f"{self.acars_url}/connect.html", {
             "logon": self.login_code,
             "from": self.callsign,
             "to": message.from_station,
             "type": PacketType.CPDLC.value,
-            "packet": message.reply_message(status)
+            "packet": reply
         })
+        self.call_message_sender_callback(message.from_station, reply.split("/")[-1])
         return res.text == "ok"
 
     def cpdlc_login(self, target_station: str) -> bool:
@@ -208,6 +242,7 @@ class CPDLC:
             "type": PacketType.CPDLC.value,
             "packet": f"/data2/{message_id_manager.next_message_id()}//Y/REQUEST LOGON"
         })
+        self.call_message_sender_callback(target_station, "REQUEST LOGON")
         return res.text == "ok"
 
     def cpdlc_logout(self) -> bool:
@@ -221,5 +256,6 @@ class CPDLC:
             "type": PacketType.CPDLC.value,
             "packet": f"/data2/{message_id_manager.next_message_id()}//N/LOGOFF"
         })
+        self.call_message_sender_callback(self.cpdlc_current_atc, "LOGOFF")
         self._cpdlc_logout()
         return res.text == "ok"

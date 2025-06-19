@@ -23,3 +23,9 @@ class CantReplyError(CustomError):
     def __init__(self):
         super().__init__()
         self.info = "This message cannot be replied"
+
+
+class ResponseError(CustomError):
+    def __init__(self):
+        super().__init__()
+        self.info = "Response parse error"

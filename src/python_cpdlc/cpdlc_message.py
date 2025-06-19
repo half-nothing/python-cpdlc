@@ -1,6 +1,3 @@
-from datetime import datetime
-from hashlib import md5
-
 from .acars_message import AcarsMessage
 from .cpdlc_message_id import message_id_manager as mim
 from .enums import PacketType, ReplyTag

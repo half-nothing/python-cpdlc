@@ -13,11 +13,6 @@ class Network(Enum):
     NONE = "None"
 
 
-class ApiStatus(Enum):
-    OK = "ok"
-    ERROR = "error"
-
-
 class PacketType(Enum):
     PROGRESS = "progress"
     CPDLC = "cpdlc"
