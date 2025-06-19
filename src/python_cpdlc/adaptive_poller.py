@@ -31,9 +31,9 @@ class AdaptivePoller:
         while self.is_running:
             interval = randint(self.min_normal_interval, self.max_normal_interval)
             try:
-                await asyncio.sleep(interval)
                 if self.is_running:
                     self.poll_function()
+                await asyncio.sleep(interval)
             except asyncio.CancelledError:
                 break
             except Exception as e:
