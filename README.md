@@ -11,39 +11,69 @@ By the way, dont forgot to logon your ATC CPDLC first :)
 ```python
 import asyncio
 
-from python_cpdlc import CPDLC, Network
+from python_cpdlc import CPDLC
+
 
 async def main():
-    # Create CPDLC client with your email and hoppie code
-    # Please dont use mine :(
-    cpdlc = CPDLC("halfnothingno@gmail.com", "9BWovZBXLUy21m")
+    # Create CPDLC client instance
+    cpdlc = CPDLC()
+
+    # Set your hoppie code
+    cpdlc.set_logon_code("11111111111")
+
+    # Set your email for network change (If you dont need to change network, you can skip it)
+    cpdlc.set_email("halfnothingno@gmail.com")
+
     # of course, you can use your own hoppie server
-    # cpdlc = CPDLC("halfnothingno@gmail.com", "9BWovZBXLUy21m", "http://www.hoppie.nl/acars/system")
-    
-    # Set your callsign first, and you can change this anytime you like
-    # But if you change this callsign, you may miss some message send to you
+    # cpdlc.set_acars_url("http://127.0.0.1:80")
+
+    # you can add callback function which will be called when cpdlc connected and disconnected
+    # there can only be one callback function per event
+    # cpdlc.set_cpdlc_connect_callback(lambda: None)
+    # cpdlc.set_cpdlc_disconnect_callback(lambda: None)
+    # cpdlc.set_cpdlc_atc_info_update_callback(lambda: None)
+
+    # you also can add message callback
+    # cpdlc.add_message_sender_callback()
+    # cpdlc.add_message_receiver_callback()
+
+    # Decorators are recommended
+    # @cpdlc.listen_message_receiver()
+    # def message_receiver(msg: AcarsMessage):
+    #     pass
+    # @cpdlc.listen_message_sender()
+    # def message_sender(to: str, msg: str):
+    #     pass
+
+    # you should set your callsign before you use CPDLC, and you can change this anytime you like
+    # but if you change this callsign, you may miss some message send to you
     cpdlc.set_callsign("CES2352")
-    
-    # You can change your network if necessary
-    # You can got your current network by cpdlc.network
-    cpdlc.change_network(Network.VATSIM)
-    
-    # Start poll thread for message reveiver
-    # If you dont call this function you cant receive message
-    cpdlc.start_poller()
-    # You can also use Thread to start and I recommend this method
-    # If you use this lib on a GUI program
-    # Thread(target=cpdlc.start_poller, daemon=True).start()
-    
+
+    # after set complete, you need to initialize service
+    cpdlc.initialize_service()
+
+    # you can reset service or reinitialize service anytime you like
+    # cpdlc.reset_service()
+    # cpdlc.reinitialize_service()
+
+    # you can get your current network by cpdlc.network
+    # you can change your network if necessary
+    # cpdlc.change_network(Network.VATSIM)
+
+    # some function...
+    # cpdlc.query_info()
+    # cpdlc.send_telex_message()
+    # cpdlc.departure_clearance_delivery()
+
     # send login request
     cpdlc.cpdlc_login("ZSHA")
-    # you can also send some other thing like DCL or just some message to someone
-    
+
     # wait 60 seconds
     await asyncio.sleep(60)
-    
+
     # request logout
     cpdlc.cpdlc_logout()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

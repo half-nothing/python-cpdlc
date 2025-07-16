@@ -1,6 +1,12 @@
 from enum import Enum
 
 
+class ServiceLevel(Enum):
+    NONE = 0
+    HALF = 1
+    FULL = 2
+
+
 class Network(Enum):
     CAFSIM = "CAFSIM"
     CFR = "CFR"
@@ -11,6 +17,7 @@ class Network(Enum):
     SXC = "SXC"
     VATSIM = "VATSIM"
     NONE = "None"
+    UNOFFICIAL = "Unofficial"
 
 
 class PacketType(Enum):

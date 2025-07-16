@@ -12,17 +12,9 @@ class AdaptivePoller:
             min_normal_interval: int = 15,
             max_normal_interval: int = 30
     ):
-        """
-        自适应轮询调度器
-
-        :param poll_function: 轮询时执行的回调函数
-        :param min_normal_interval: 正常轮询最小间隔（秒）
-        :param max_normal_interval: 正常轮询最大间隔（秒）
-        """
         self.poll_function = poll_function
         self.min_normal_interval = min_normal_interval
         self.max_normal_interval = max_normal_interval
-
         self.fast_mode_remaining = 0
         self.is_running = False
         self.task: Optional[asyncio.Task] = None
@@ -45,13 +37,9 @@ class AdaptivePoller:
             self.is_running = True
             self.task = asyncio.run(self._polling_loop())
 
-    async def stop(self):
+    def stop(self):
         if self.is_running and self.task:
             logger.debug(f"Poll thread stopped")
             self.is_running = False
             self.task.cancel()
-            try:
-                await self.task
-            except asyncio.CancelledError:
-                pass
             self.task = None
