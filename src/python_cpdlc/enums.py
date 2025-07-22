@@ -1,10 +1,17 @@
-from enum import Enum
+from enum import Enum, auto
 
 
 class ServiceLevel(Enum):
-    NONE = 0
-    HALF = 1
-    FULL = 2
+    NONE = auto()
+    HALF = auto()
+    FULL = auto()
+
+
+class ConnectionState(Enum):
+    DISCONNECTED = auto()
+    CONNECTING = auto()
+    CONNECTED = auto()
+    DISCONNECTING = auto()
 
 
 class Network(Enum):

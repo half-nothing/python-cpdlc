@@ -1,17 +1,32 @@
-from .acars_message import AcarsMessage
-from .cpdlc import CPDLC
-from .cpdlc_message import CPDLCMessage
 from .enums import *
+from .exception import *
+from .acars_message import AcarsMessage
+from .cpdlc_message import CPDLCMessage
+from .cpdlc import CPDLC
 
-__version__ = "1.2.0"
+__version__ = "1.3.1"
 
 __ALL__ = [
-    "message_id_manager",
     "AcarsMessage",
     "CPDLCMessage",
     "CPDLC",
     "Network",
     "PacketType",
     "InfoType",
-    "ReplyTag"
+    "ReplyTag",
+    "ConnectionState"
+    "ParameterError",
+    "InitializationError",
+    "NetworkSwitchError",
+    "LoginError",
+    "CallsignError",
+    "CantReplyError",
+    "ResponseParserError",
+    "FullServiceRequiredError",
+    "InvalidStateError",
+    "NoOfficialServerError",
+    "NoInitializationError",
+    "AlreadyLoginError",
+    "NotLoginError",
+    "AlreadyReplyError"
 ]

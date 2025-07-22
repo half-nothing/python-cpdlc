@@ -1,7 +1,14 @@
-from python_cpdlc import AcarsMessage, CPDLCMessage, PacketType
+from re import compile
+
+from .acars_message import AcarsMessage
+from .cpdlc_message import CPDLCMessage
+from .enums import PacketType
 
 
 class AcarsMessageFactory:
+    split_pattern = compile(r"\{[\s\S]*?\{[\s\S]*?}}|\{[\s\S]*?}")
+    data_pattern = compile(r"\{[\s\S]*?}")
+
     @staticmethod
     def parser_message(text: str) -> list[AcarsMessage]:
         """
@@ -9,7 +16,7 @@ class AcarsMessageFactory:
         :param text: acars message
         """
         result: list["AcarsMessage"] = []
-        messages = AcarsMessage.split_pattern.findall(text)
+        messages = AcarsMessageFactory.split_pattern.findall(text)
         for message in messages:
             message = message[1:-1]
             temp = message.split(" ")[:2]
@@ -18,5 +25,6 @@ class AcarsMessageFactory:
                 case PacketType.CPDLC:
                     result.append(CPDLCMessage(temp[0], type_tag, message))
                 case _:
-                    result.append(AcarsMessage(temp[0], type_tag, AcarsMessage.data_pattern.findall(message)[0][1:-1]))
+                    result.append(AcarsMessage(temp[0], type_tag,
+                                               AcarsMessageFactory.data_pattern.findall(message)[0][1:-1]))
         return result
