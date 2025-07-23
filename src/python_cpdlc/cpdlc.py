@@ -119,7 +119,7 @@ class CPDLC:
         self._cpdlc_connect_callback: Optional[Callable[[], None]] = None
         self._cpdlc_atc_info_update_callback: Optional[Callable[[], None]] = None
         self._cpdlc_disconnect_callback: Optional[Callable[[], None]] = None
-        self._network: Optional[Network] = None
+        self._network: Network = Network.UNKNOWN
         self._client = Client(timeout=10.0)
         self._state_lock = RLock()
         self._callback_executor = ThreadPoolExecutor(max_workers=max_workers)
@@ -292,6 +292,7 @@ class CPDLC:
         else:
             logger.trace(f"Full service provided")
             self._service_level = ServiceLevel.FULL
+            self._network = self.get_network()
         self.start_poller()
         self._service_initialization = True
 
@@ -516,7 +517,7 @@ class CPDLC:
             logger.error(f"Login code or email is invalid, please check login code or email")
             raise LoginError()
         selected = element.find("option", attrs={"selected": ""})
-        logger.debug(f"Current network: {selected}")
+        logger.debug(f"Current network: {selected.text}")
         return Network(selected.text)
 
     @_require_full_service

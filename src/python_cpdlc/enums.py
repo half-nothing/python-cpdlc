@@ -25,6 +25,7 @@ class Network(Enum):
     VATSIM = "VATSIM"
     NONE = "None"
     UNOFFICIAL = "Unofficial"
+    UNKNOWN = "Unknown"
 
 
 class PacketType(Enum):
