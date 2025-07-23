@@ -41,7 +41,6 @@ class CPDLC:
         _network (Optional[Network]): Hoppie ACARS network
         _client (httpx.Client): httpx client
         _state_lock (threading.RLock): global lock
-        _callback_executor (concurrent.futures.ThreadPoolExecutor): Callback execute pool
 
     Examples:
         # Create CPDLC client instance\n
@@ -60,7 +59,7 @@ class CPDLC:
         # you also can add message callback\n
         # cpdlc.add_message_sender_callback()\n
         # cpdlc.add_message_receiver_callback()\n
-        # Decorators are recommended\n
+        # Decorators are recommended unless your callback function is a class method\n
         # @cpdlc.listen_message_receiver()\n
         # def message_receiver(msg: AcarsMessage):\n
         #       pass\n
@@ -108,7 +107,6 @@ class CPDLC:
     _network: Optional[Network]
     _client: Client
     _state_lock: RLock
-    _callback_executor: ThreadPoolExecutor
 
     def __init__(self, max_workers: int = 8) -> None:
         """

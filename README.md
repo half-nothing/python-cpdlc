@@ -37,7 +37,7 @@ async def main():
     # cpdlc.add_message_sender_callback()
     # cpdlc.add_message_receiver_callback()
 
-    # Decorators are recommended
+    # Decorators are recommended unless your callback function is a class method
     # @cpdlc.listen_message_receiver()
     # def message_receiver(msg: AcarsMessage):
     #     pass

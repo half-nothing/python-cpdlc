@@ -1,4 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 from re import compile
 from threading import RLock
@@ -48,7 +47,6 @@ class CPDLC:
         _network (Optional[Network]): Hoppie ACARS network
         _client (httpx.Client): httpx client
         _state_lock (threading.RLock): global lock
-        _callback_executor (concurrent.futures.ThreadPoolExecutor): Callback execute pool
 
     Examples:
         # Create CPDLC client instance\n
@@ -67,7 +65,7 @@ class CPDLC:
         # you also can add message callback\n
         # cpdlc.add_message_sender_callback()\n
         # cpdlc.add_message_receiver_callback()\n
-        # Decorators are recommended\n
+        # Decorators are recommended unless your callback function is a class method\n
         # @cpdlc.listen_message_receiver()\n
         # def message_receiver(msg: AcarsMessage):\n
         #       pass\n
@@ -97,11 +95,9 @@ class CPDLC:
         cpdlc.cpdlc_logout()\n
     """
 
-    def __init__(self, max_workers: int = 8):
+    def __init__(self):
         """
         Constructor for CPDLC class
-        Args:
-            max_workers (int): Maximum number of threads
         """
         logger.trace("CPDLC client initializing")
         self._service_initialization = False
@@ -122,7 +118,6 @@ class CPDLC:
         self._network: Network = Network.UNKNOWN
         self._client = Client(timeout=10.0)
         self._state_lock = RLock()
-        self._callback_executor = ThreadPoolExecutor(max_workers=max_workers)
 
     def __del__(self):
         if hasattr(self, '_client'):
@@ -342,16 +337,13 @@ class CPDLC:
         Args:
             message (str): message
         """
-
-        def _safe_callback_execution(cb: Callable[[AcarsMessage], None]) -> None:
-            try:
-                cb(message)
-            except Exception as e:
-                logger.error(f"Exception occurred while calling callback: {e}")
-
         logger.trace(f"Message received : {message}")
         for callback in self._message_receiver_callbacks:
-            self._callback_executor.submit(_safe_callback_execution, callback)
+            try:
+                logger.trace(f"Callback executed: {callback.__name__}")
+                callback(message)
+            except Exception as e:
+                logger.error(f"Exception occurred while calling callback: {e}")
 
     def listen_message_sender(self):
         """
@@ -378,16 +370,13 @@ class CPDLC:
             to (str): message send to
             message (str): message
         """
-
-        def _safe_callback_execution(cb: Callable[[str, str], None]) -> None:
-            try:
-                cb(to, message)
-            except Exception as e:
-                logger.error(f"Exception occurred while calling callback: {e}")
-
         logger.trace(f"Message send to {to}: {message}")
         for callback in self._message_sender_callbacks:
-            self._callback_executor.submit(_safe_callback_execution, callback)
+            try:
+                logger.trace(f"Callback executed: {callback.__name__}")
+                callback(to, message)
+            except Exception as e:
+                logger.error(f"Exception occurred while calling callback: {e}")
 
     # Decorators
 
