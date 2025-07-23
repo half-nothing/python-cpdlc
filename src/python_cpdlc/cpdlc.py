@@ -116,11 +116,12 @@ class CPDLC:
         self._cpdlc_atc_info_update_callback: Optional[Callable[[], None]] = None
         self._cpdlc_disconnect_callback: Optional[Callable[[], None]] = None
         self._network: Network = Network.UNKNOWN
-        self._client = Client(timeout=10.0)
         self._state_lock = RLock()
+        self._client: Optional[Client] = None
+        logger.trace("CPDLC client initialized")
 
     def __del__(self):
-        if hasattr(self, '_client'):
+        if hasattr(self, '_client') and self._client:
             self._client.close()
 
     # Getter and Setter
@@ -204,6 +205,15 @@ class CPDLC:
         self._poller.set_interval(min_interval, max_interval)
 
     # Properties
+    @property
+    def client(self) -> Client:
+        if self._client is None:
+            logger.trace("httpx client initializing")
+            with self._state_lock:
+                self._client = Client(timeout=10)
+            logger.trace("Client initialized")
+        return self._client
+
     @property
     def callsign(self) -> str:
         return self._callsign
@@ -481,7 +491,7 @@ class CPDLC:
             NetworkError: Communication failure
         """
         try:
-            return self._client.post(url, data=data)
+            return self.client.post(url, data=data)
         except RequestError as e:
             logger.error(f"Network request failed: {e}")
             raise NetworkError("Network communication failed") from e

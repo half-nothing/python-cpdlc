@@ -105,7 +105,7 @@ class CPDLC:
     _cpdlc_atc_info_update_callback: Optional[Callable[[], None]]
     _cpdlc_disconnect_callback: Optional[Callable[[], None]]
     _network: Optional[Network]
-    _client: Client
+    _client: Optional[Client]
     _state_lock: RLock
 
     def __init__(self, max_workers: int = 8) -> None:
@@ -186,6 +186,9 @@ class CPDLC:
             ValueError: When min_interval greater than max_interval
         """
         ...
+
+    @property
+    def client(self) -> Client: ...
 
     @property
     def callsign(self) -> str: ...

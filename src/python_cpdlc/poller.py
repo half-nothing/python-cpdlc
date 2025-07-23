@@ -41,6 +41,7 @@ class Poller:
         self._lock = Lock()
         self._exit_event = Event()
         self._task: Optional[Thread] = None
+        logger.trace("Poller initialized")
 
     def _polling_loop(self) -> None:
         """
