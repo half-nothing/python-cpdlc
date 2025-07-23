@@ -397,7 +397,7 @@ class CPDLC:
         """
 
         @wraps(func)
-        def wrapper(self: CPDLC, *args: P.args, **kwargs: P.kwargs) -> R:
+        def wrapper(self: "CPDLC", *args: P.args, **kwargs: P.kwargs) -> R:
             if not self.is_official_service:
                 raise NoOfficialServerError()
             return func(self, *args, **kwargs)
@@ -413,7 +413,7 @@ class CPDLC:
         """
 
         @wraps(func)
-        def wrapper(self: CPDLC, *args: P.args, **kwargs: P.kwargs) -> R:
+        def wrapper(self: "CPDLC", *args: P.args, **kwargs: P.kwargs) -> R:
             if self._service_level != ServiceLevel.FULL:
                 logger.error("No full service available, cannot change network")
                 raise FullServiceRequiredError()
@@ -430,7 +430,7 @@ class CPDLC:
         """
 
         @wraps(func)
-        def wrapper(self: CPDLC, *args: P.args, **kwargs: P.kwargs) -> R:
+        def wrapper(self: "CPDLC", *args: P.args, **kwargs: P.kwargs) -> R:
             if not self._service_initialization:
                 raise NoInitializationError()
             return func(self, *args, **kwargs)
@@ -446,7 +446,7 @@ class CPDLC:
         """
 
         @wraps(func)
-        def wrapper(self: CPDLC, *args: P.args, **kwargs: P.kwargs) -> R:
+        def wrapper(self: "CPDLC", *args: P.args, **kwargs: P.kwargs) -> R:
             if self._callsign is None:
                 raise CallsignError()
             return func(self, *args, **kwargs)
@@ -463,7 +463,7 @@ class CPDLC:
 
         def decorator(func: Callable[P, R]) -> Callable[P, R]:
             @wraps(func)
-            def wrapper(self: CPDLC, *args: P.args, **kwargs: P.kwargs) -> R:
+            def wrapper(self: "CPDLC", *args: P.args, **kwargs: P.kwargs) -> R:
                 if self._cpdlc_connect_state not in states:
                     raise InvalidStateError(
                         f"Required states: {[s.name for s in states]}, "
