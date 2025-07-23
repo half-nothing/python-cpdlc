@@ -1,7 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
+from functools import wraps
 from re import compile
 from threading import RLock
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, ParamSpec, TypeVar
 
 from bs4 import BeautifulSoup
 from httpx import Client, NetworkError, RequestError, Response
@@ -9,14 +10,17 @@ from loguru import logger
 
 from .acars_message import AcarsMessage
 from .acars_message_factory import AcarsMessageFactory
-from .adaptive_poller import AdaptivePoller
 from .cpdlc_message import CPDLCMessage
 from .cpdlc_message_id import message_id_manager
 from .enums import ConnectionState, InfoType, PacketType, ServiceLevel
 from .exception import *
+from .poller import Poller
 
 _OFFICIAL_ACARS_URL = "http://www.hoppie.nl/acars/system"
 _ATC_INFO_REGEX = compile(r"CURRENT ATC UNIT@_@(\w+)@_@(\w+)")
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class CPDLC:
@@ -25,65 +29,80 @@ class CPDLC:
 
     Provides interface for ACARS/CPDLC communication with Hoppie's ACARS system
 
-    Simple example:
-        cpdlc = CPDLC()  # Create CPDLC client instance
-        cpdlc.set_logon_code("11111111111")  # Set your hoppie code
+    Attributes:
+        _service_initialization (bool): Service initialization flag
+        _service_level (ServiceLevel): Service level
+        _login_code (Optional[str]): Hoppie ACARS network login code
+        _email (Optional[str]): Hoppie ACARS network login email
+        _acars_url (str): Hoppie ACARS network url
+        _callsign (Optional[str]): Aircraft callsign
+        _poller (Poller): poller object
+        _message_receiver_callbacks (list[Callable[[AcarsMessage], None]]): message receiver callbacks
+        _message_sender_callbacks (list[Callable[[str, str], None]]): message sender callbacks
+        _cpdlc_connect_state (ConnectionState): CPDLC connection state
+        _cpdlc_current_atc (Optional[str]): CPDLC current ATC letter (e.g. ZSHA_CTR)
+        _cpdlc_atc_callsign (Optional[str]): CPDLC current ATC callsign (e.g. Shanghai Control)
+        _cpdlc_connect_callback (Optional[Callable[[], None]]): CPDLC connect callback function
+        _cpdlc_atc_info_update_callback (Optional[Callable[[], None]]): CPDLC connection info updated callback function
+        _cpdlc_disconnect_callback (Optional[Callable[[], None]]): CPDLC disconnect callback function
+        _network (Optional[Network]): Hoppie ACARS network
+        _client (httpx.Client): httpx client
+        _state_lock (threading.RLock): global lock
+        _callback_executor (concurrent.futures.ThreadPoolExecutor): Callback execute pool
 
-        # Set your email for network change (If you dont need to change network, you can skip it)
-        cpdlc.set_email("halfnothingno@gmail.com")
-
-        # of course, you can use your own hoppie server
-        # cpdlc.set_acars_url("http://127.0.0.1:80")
-
-        # you can add callback function which will be called when cpdlc connected and disconnected
-        # there can only be one callback function per event
-        # cpdlc.set_cpdlc_connect_callback(lambda: None)
-        # cpdlc.set_cpdlc_disconnect_callback(lambda: None)
-        # cpdlc.set_cpdlc_atc_info_update_callback(lambda: None)
-
-        # you also can add message callback
-        # cpdlc.add_message_sender_callback()
-        # cpdlc.add_message_receiver_callback()
-
-        # Decorators are recommended
-        # @cpdlc.listen_message_receiver()
-        # def message_receiver(msg: AcarsMessage):
-        #     pass
-        # @cpdlc.listen_message_sender()
-        # def message_sender(to: str, msg: str):
-        #     pass
-
-        # you should set your callsign before you use CPDLC, and you can change this anytime you like
-        # but if you change this callsign, you may miss some message send to you
-        cpdlc.set_callsign("CES2352")
-
-        # after set complete, you need to initialize service
-        cpdlc.initialize_service()
-
-        # you can reset service or reinitialize service anytime you like
-        # cpdlc.reset_service()
-        # cpdlc.reinitialize_service()
-
-        # you can get your current network by cpdlc.network
-        # you can change your network if necessary
-        # cpdlc.change_network(Network.VATSIM)
-
-        # some function...
-        # cpdlc.query_info()
-        # cpdlc.send_telex_message()
-        # cpdlc.departure_clearance_delivery()
-
-        # send login request
-        cpdlc.cpdlc_login("ZSHA")
-
-        # wait 60 seconds
-        await asyncio.sleep(60)
-
-        # request logout
-        cpdlc.cpdlc_logout()
+    Examples:
+        # Create CPDLC client instance\n
+        cpdlc = CPDLC()\n
+        # Set your hoppie code\n
+        cpdlc.set_logon_code("11111111111")\n
+        # Set your email for network change (If you don't need to change network, you can skip it)\n
+        cpdlc.set_email("halfnothingno@gmail.com")\n
+        # of course, you can use your own hoppie server\n
+        # cpdlc.set_acars_url("http://127.0.0.1:80")\n
+        # you can add callback function which will be called when cpdlc connected and disconnected\n
+        # there can only be one callback function per event\n
+        # cpdlc.set_cpdlc_connect_callback(lambda: None)\n
+        # cpdlc.set_cpdlc_disconnect_callback(lambda: None)\n
+        # cpdlc.set_cpdlc_atc_info_update_callback(lambda: None)\n
+        # you also can add message callback\n
+        # cpdlc.add_message_sender_callback()\n
+        # cpdlc.add_message_receiver_callback()\n
+        # Decorators are recommended\n
+        # @cpdlc.listen_message_receiver()\n
+        # def message_receiver(msg: AcarsMessage):\n
+        #       pass\n
+        # @cpdlc.listen_message_sender()\n
+        # def message_sender(to: str, msg: str):\n
+        #       pass\n
+        # you should set your callsign before you use CPDLC, and you can change this anytime you like\n
+        # but if you change this callsign, you may miss some message send to you\n
+        cpdlc.set_callsign("CES2352")\n
+        # after set complete, you need to initialize service\n
+        cpdlc.initialize_service()\n
+        # you can reset service or reinitialize service anytime you like\n
+        # cpdlc.reset_service()\n
+        # cpdlc.reinitialize_service()\n
+        # you can get your current network by cpdlc.network\n
+        # you can change your network if necessary\n
+        # cpdlc.change_network(Network.VATSIM)\n
+        # some function...\n
+        # cpdlc.query_info()\n
+        # cpdlc.send_telex_message()\n
+        # cpdlc.departure_clearance_delivery()\n
+        # send login request\n
+        cpdlc.cpdlc_login("ZSHA")\n
+        # wait 60 seconds\n
+        await asyncio.sleep(60)\n
+        # request logout\n
+        cpdlc.cpdlc_logout()\n
     """
 
     def __init__(self, max_workers: int = 8):
+        """
+        Constructor for CPDLC class
+        Args:
+            max_workers (int): Maximum number of threads
+        """
         logger.trace("CPDLC client initializing")
         self._service_initialization = False
         self._service_level = ServiceLevel.NONE
@@ -91,7 +110,7 @@ class CPDLC:
         self._email: Optional[str] = None
         self._acars_url: str = _OFFICIAL_ACARS_URL
         self._callsign: Optional[str] = None
-        self._poller: AdaptivePoller = AdaptivePoller(self._poll_message)
+        self._poller: Poller = Poller(self._poll_message)
         self._message_receiver_callbacks: list[Callable[[AcarsMessage], None]] = []
         self._message_sender_callbacks: list[Callable[[str, str], None]] = []
         self._cpdlc_connect_state = ConnectionState.DISCONNECTED
@@ -112,36 +131,81 @@ class CPDLC:
     # Getter and Setter
 
     def set_callsign(self, callsign: str):
+        """
+        Set callsign
+        Args:
+            callsign (str): callsign
+        """
         logger.trace(f"Setting callsign: {callsign}")
         self._callsign = callsign
 
     def set_logon_code(self, logon_code: str):
+        """
+        Set logon code
+        Args:
+            logon_code (str): logon code
+        """
         logger.trace(f"Setting logon code: {logon_code}")
         self._login_code = logon_code
 
     def set_email(self, email: str):
+        """
+        Set email, if service has been initialized without a email, which means service not in FULL\n
+        Set email will automatic upgrade service level to FULL
+        Of course, it will not be triggered if it is not the official server address
+        Args:
+            email (str): email
+        """
         logger.trace(f"Setting email: {email}")
         old_email = self._email
         self._email = email
 
-        if self._service_initialization and old_email is None and email:
+        if self.is_official_service and self._service_initialization and old_email is None and email:
             logger.info("Upgrading to FULL service")
             self._service_level = ServiceLevel.FULL
 
     def set_acars_url(self, acars_url: str):
+        """
+        Set ACARS url
+        Args:
+            acars_url (str): ACARS url
+        """
         logger.trace(f"Setting acars url: {acars_url}")
         self._acars_url = acars_url
 
     def set_cpdlc_connect_callback(self, callback: Callable[[], None]):
+        """
+        Set CPDLC connect callback
+        Args:
+            callback (Callable[[], None]): callback
+        """
         self._cpdlc_connect_callback = callback
 
     def set_cpdlc_atc_info_update_callback(self, callback: Callable[[], None]):
+        """
+        Set CPDLC atc info update callback
+        Args:
+            callback (Callable[[], None]): callback
+        """
         self._cpdlc_atc_info_update_callback = callback
 
     def set_cpdlc_disconnect_callback(self, callback: Callable[[], None]):
+        """
+        Set CPDLC disconnect callback
+        Args:
+            callback (Callable[[], None]): callback
+        """
         self._cpdlc_disconnect_callback = callback
 
     def set_poll_interval_range(self, min_interval: int, max_interval: int):
+        """
+        Set polling interval range
+        Args:
+            min_interval (int): min_interval
+            max_interval (int): max_interval
+        Raises:
+            ValueError: When min_interval greater than max_interval
+        """
         self._poller.set_interval(min_interval, max_interval)
 
     # Properties
@@ -184,14 +248,32 @@ class CPDLC:
     # Initialize functions
 
     def start_poller(self):
+        """
+        Start polling thread
+        """
         logger.trace("Starting poller thread")
         self._poller.start()
 
     def stop_poller(self):
+        """
+        Stop polling thread
+        """
         logger.trace("Stopping poller thread")
         self._poller.stop()
 
     def initialize_service(self):
+        """
+        Initialize service
+        Raises:
+            ParameterError: when callsign or login code is not set
+            InitializationError: when service initialize fail
+        Example:
+            cpdlc_service = CPDLC()\n
+            cpdlc_service.set_callsign("<CALLSIGN>")\n
+            cpdlc_service.set_email("<EMAIL>")\n
+            cpdlc_service.set_login_code("<CODE>")\n
+            cpdlc_service.initialize_service()
+        """
         logger.trace("Initializing acars service")
         if self._service_initialization:
             logger.warning("Service already initialized")
@@ -214,6 +296,9 @@ class CPDLC:
         self._service_initialization = True
 
     def reset_service(self):
+        """
+        Reset service
+        """
         logger.trace("Resetting service")
         if not self._service_initialization:
             logger.warning("Service not initialized")
@@ -223,6 +308,9 @@ class CPDLC:
         self._service_initialization = False
 
     def reinitialize_service(self):
+        """
+        Reinitialize service
+        """
         logger.trace("Reinitializing service")
         self.reset_service()
         self.initialize_service()
@@ -230,36 +318,70 @@ class CPDLC:
     # Callback functions
 
     @staticmethod
-    def _safe_callback_execution(callback, *args):
+    def _safe_callback_execution(callback: Callable, *args):
+        """
+        Callback executor, for internal use only
+        Args:
+            callback (Callable[[AcarsMessage], None]): callback
+        """
         try:
             callback(*args)
         except Exception as e:
-            logger.error(f"Exception occured while calling callback: {e}")
+            logger.error(f"Exception occurred while calling callback: {e}")
 
     def listen_message_receiver(self):
+        """
+        Add callback to receive message
+        """
+
         def wrapper(func):
             self._message_receiver_callbacks.append(func)
 
         return wrapper
 
     def add_message_receiver_callback(self, callback: Callable[[AcarsMessage], None]) -> None:
+        """
+        Add callback to receive message
+        Args:
+            callback (Callable[[AcarsMessage], None]): callback
+        """
         self._message_receiver_callbacks.append(callback)
 
     def _message_receiver_callback(self, message: AcarsMessage) -> None:
+        """
+        Triggers callback to receive message, for internal use only
+        Args:
+            message (str): message
+        """
         logger.trace(f"Message received : {message}")
         for callback in self._message_receiver_callbacks:
             self._callback_executor.submit(lambda arg: self._safe_callback_execution(*arg), (callback, message))
 
     def listen_message_sender(self):
+        """
+        Add callback to send message
+        """
+
         def wrapper(func):
             self._message_sender_callbacks.append(func)
 
         return wrapper
 
     def add_message_sender_callback(self, callback: Callable[[str, str], None]) -> None:
+        """
+        Add callback to send message
+        Args:
+            callback (Callable[[str, str], None]): callback
+        """
         self._message_sender_callbacks.append(callback)
 
     def _message_sender_callback(self, to: str, message: str) -> None:
+        """
+        Triggers callback to send message, for internal use only
+        Args:
+            to (str): message send to
+            message (str): message
+        """
         logger.trace(f"Message send to {to}: {message}")
         for callback in self._message_sender_callbacks:
             self._callback_executor.submit(lambda arg: self._safe_callback_execution(*arg), (callback, to, message))
@@ -267,8 +389,15 @@ class CPDLC:
     # Decorators
 
     @staticmethod
-    def _require_official_server(func):
-        def wrapper(self, *args, **kwargs):
+    def _require_official_server(func: Callable[P, R]) -> Callable[P, R]:
+        """
+        Service address checker, for internal use only
+        Raises:
+            NoOfficialServerError: Not official server
+        """
+
+        @wraps(func)
+        def wrapper(self: CPDLC, *args: P.args, **kwargs: P.kwargs) -> R:
             if not self.is_official_service:
                 raise NoOfficialServerError()
             return func(self, *args, **kwargs)
@@ -276,8 +405,15 @@ class CPDLC:
         return wrapper
 
     @staticmethod
-    def _require_full_service(func):
-        def wrapper(self, *args, **kwargs):
+    def _require_full_service(func: Callable[P, R]) -> Callable[P, R]:
+        """
+        Service level checker, for internal use only
+        Raises:
+            FullServiceRequiredError: Not full service
+        """
+
+        @wraps(func)
+        def wrapper(self: CPDLC, *args: P.args, **kwargs: P.kwargs) -> R:
             if self._service_level != ServiceLevel.FULL:
                 logger.error("No full service available, cannot change network")
                 raise FullServiceRequiredError()
@@ -286,8 +422,15 @@ class CPDLC:
         return wrapper
 
     @staticmethod
-    def _require_service_initialized(func):
-        def wrapper(self, *args, **kwargs):
+    def _require_service_initialized(func: Callable[P, R]) -> Callable[P, R]:
+        """
+        Service initialization checker, for internal use only
+        Raises:
+            NoInitializationError: Service not initialized
+        """
+
+        @wraps(func)
+        def wrapper(self: CPDLC, *args: P.args, **kwargs: P.kwargs) -> R:
             if not self._service_initialization:
                 raise NoInitializationError()
             return func(self, *args, **kwargs)
@@ -295,8 +438,15 @@ class CPDLC:
         return wrapper
 
     @staticmethod
-    def _require_callsign_set(func):
-        def wrapper(self, *args, **kwargs):
+    def _require_callsign_set(func: Callable[P, R]) -> Callable[P, R]:
+        """
+        Callsign checker, for internal use only
+        Raises:
+            CallsignError: Aircraft callsign not set
+        """
+
+        @wraps(func)
+        def wrapper(self: CPDLC, *args: P.args, **kwargs: P.kwargs) -> R:
             if self._callsign is None:
                 raise CallsignError()
             return func(self, *args, **kwargs)
@@ -304,9 +454,16 @@ class CPDLC:
         return wrapper
 
     @staticmethod
-    def _require_connection_state(*states: ConnectionState):
-        def decorator(func):
-            def wrapper(self, *args, **kwargs):
+    def _require_connection_state(*states: ConnectionState) -> Callable[[Callable[P, R]], Callable[P, R]]:
+        """
+        Connection state checker, for internal use only
+        Raises:
+                InvalidStateError: connection state is invalid
+        """
+
+        def decorator(func: Callable[P, R]) -> Callable[P, R]:
+            @wraps(func)
+            def wrapper(self: CPDLC, *args: P.args, **kwargs: P.kwargs) -> R:
                 if self._cpdlc_connect_state not in states:
                     raise InvalidStateError(
                         f"Required states: {[s.name for s in states]}, "
@@ -321,6 +478,16 @@ class CPDLC:
     # Network function
 
     def _send_request(self, url: str, data: dict) -> Response:
+        """
+        Send a request to hoppie ACARS server, for internal use only
+        Args:
+            url (str): URL to send request
+            data (dict): Data to send to hoppie ACARS server
+        Returns:
+            response object
+        Raises:
+            NetworkError: Communication failure
+        """
         try:
             return self._client.post(url, data=data)
         except RequestError as e:
@@ -328,6 +495,14 @@ class CPDLC:
             raise NetworkError("Network communication failed") from e
 
     def get_network(self) -> Network:
+        """
+        Get current network
+        Returns:
+            current network
+        Raises:
+            NetworkError: Communication failure
+            NotLoginError: Not logged in
+        """
         logger.trace("Request get acars network")
         if not self.is_official_service:
             return Network.UNOFFICIAL
@@ -347,6 +522,19 @@ class CPDLC:
     @_require_full_service
     @_require_official_server
     def change_network(self, new_network: Network) -> bool:
+        """
+        Change network
+        Args:
+            new_network (Network): new network
+        Returns:
+            true if change succeed, false otherwise
+        Raises:
+            FullServiceRequiredError: Not full service
+            NoOfficialServerError: Not official server
+            NetworkError: Communication failure
+            ResponseParserError: when message parser error
+            NetworkSwitchError: when network change failed
+        """
         logger.trace("Request change acars network")
         if new_network == self._network:
             logger.warning(f"Same network. no change")
@@ -374,6 +562,12 @@ class CPDLC:
 
     @_require_service_initialized
     def _cpdlc_logout(self):
+        """
+        Clear CPDLC variable, for internal use only
+        Raises:
+            NoInitializationError: Service not initialized
+            NotLoginError: Not logged in
+        """
         with self._state_lock:
             if self._cpdlc_connect_state != ConnectionState.CONNECTED:
                 raise NotLoginError()
@@ -387,6 +581,18 @@ class CPDLC:
     @_require_service_initialized
     @_require_callsign_set
     def cpdlc_login(self, target_station: str) -> bool:
+        """
+        Request CPDLC login to target station
+        Args:
+            target_station (str): target station name (e.g. ZSHA_CTR)
+        Returns:
+            true if request sent successfully
+        Raises:
+            NoInitializationError: Service not initialized
+            CallsignError: Aircraft callsign not set
+            NetworkError: Communication failure
+            AlreadyLoginError: Already logged in
+        """
         logger.trace("CPDLC request login")
         with self._state_lock:
             if self._cpdlc_connect_state != ConnectionState.DISCONNECTED:
@@ -407,6 +613,16 @@ class CPDLC:
     @_require_service_initialized
     @_require_callsign_set
     def cpdlc_logout(self) -> bool:
+        """
+        Request logout
+        Returns:
+            true if request sent successfully
+        Raises:
+            NoInitializationError: Service not initialized
+            CallsignError: Aircraft callsign not set
+            NetworkError: Communication failure
+            NotLoginError: Not logged in
+        """
         logger.trace("CPDLC request logout")
         with self._state_lock:
             if self._cpdlc_connect_state != ConnectionState.CONNECTED:
@@ -424,7 +640,12 @@ class CPDLC:
         self._cpdlc_logout()
         return res.text == "ok"
 
-    def _handle_message(self, message: Union[AcarsMessage]):
+    def _handle_message(self, message: AcarsMessage):
+        """
+        Handle CPDLC login and logout message, for internal use only
+        Args:
+            message (AcarsMessage): message to be handled
+        """
         if isinstance(message, CPDLCMessage):
             if message.message == "LOGON ACCEPTED":
                 # cpdlc logon success
@@ -447,6 +668,11 @@ class CPDLC:
                 self._cpdlc_logout()
 
     def _poll_message(self):
+        """
+        Poll message handler, for internal use only
+        Raises:
+            NetworkError: Communication failure
+        """
         res = self._send_request(f"{self._acars_url}/connect.html", {
             "logon": self._login_code,
             "from": self._callsign,
@@ -460,6 +686,16 @@ class CPDLC:
 
     @_require_callsign_set
     def _ping_station(self, station_callsign: str = "SERVER") -> bool:
+        """
+        Test connection, for internal use only
+        Args:
+            station_callsign (str): station callsign
+        Returns:
+            true if connection succeeded
+        Raises:
+            NetworkError: Communication failure
+            LoginError: Login failure
+        """
         logger.debug(f"Ping station: {station_callsign}")
         res = self._send_request(f"{self._acars_url}/connect.html", {
             "logon": self._login_code,
@@ -479,6 +715,17 @@ class CPDLC:
     @_require_service_initialized
     @_require_callsign_set
     def query_info(self, info_type: InfoType, icao: str) -> AcarsMessage:
+        """
+        Query info
+        Args:
+            info_type (InfoType): Target info type
+            icao (str): ICAO
+        Returns:
+            AcarsMessage: query info message
+        Raises:
+            ResponseParserError: when message parser error
+            NetworkError: Communication failure
+        """
         logger.debug(f"Query {info_type.value} for {icao}")
         res = self._send_request(f"{self._acars_url}/connect.html", {
             "logon": self._login_code,
@@ -523,6 +770,22 @@ class CPDLC:
     @_require_callsign_set
     def departure_clearance_delivery(self, target_station: str, aircraft_type: str, dest_airport: str, dep_airport: str,
                                      stand: str, atis_letter: str) -> bool:
+        """
+        Send DCL message to ground station
+        Args:
+            target_station (str): Recipient station callsign (e.g., "ZSSS_GND")
+            aircraft_type (str): aircraft type
+            dest_airport (str): destination airport
+            dep_airport (str): departure airport
+            stand: (str): stand
+            atis_letter (str): atis letter
+        Returns:
+            bool: True if message was accepted by server
+        Raises:
+            NoInitializationError: Service not initialized
+            CallsignError: Aircraft callsign not set
+            NetworkError: Communication failure
+        """
         logger.debug(f"Send DCL to {target_station} from {dep_airport} to {dest_airport}")
         return self.send_telex_message(target_station,
                                        f"REQUEST PREDEP CLEARANCE {self._callsign} {aircraft_type} "
@@ -533,6 +796,20 @@ class CPDLC:
     @_require_callsign_set
     @_require_connection_state(ConnectionState.CONNECTED)
     def reply_cpdlc_message(self, message: CPDLCMessage, status: bool) -> bool:
+        """
+        Reply to a CPDLC message
+        Args:
+            message (CPDLCMessage): target CPDLC message
+            status (bool): reply status
+        Returns:
+            bool: True if message was accepted by server
+        Raises:
+            NoInitializationError: Service not initialized
+            CallsignError: Aircraft callsign not set
+            InvalidStateError: Connection state error
+            NetworkError: Communication failure
+            AlreadyReplyError: Message already replied
+        """
         logger.debug(f"Reply CPDLC message with status {status}")
         if message.has_replied:
             raise AlreadyReplyError()
@@ -540,9 +817,9 @@ class CPDLC:
         res = self._send_request(f"{self._acars_url}/connect.html", {
             "logon": self._login_code,
             "from": self._callsign,
-            "to": message.station,
+            "to": message.target_station,
             "type": PacketType.CPDLC.value,
             "packet": reply
         })
-        self._message_sender_callback(message.station, reply.split("/")[-1])
+        self._message_sender_callback(message.target_station, reply.split("/")[-1])
         return res.text == "ok"

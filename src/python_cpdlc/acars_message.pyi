@@ -1,7 +1,5 @@
+from .enums import MessageDirection as MessageDirection, PacketType as PacketType
 from datetime import datetime
-from hashlib import md5
-
-from .enums import MessageDirection, PacketType
 
 
 class AcarsMessage:
@@ -19,9 +17,14 @@ class AcarsMessage:
         _direction (MessageDirection): direction of message
         _timestamp (datetime): timestamp when message was received
     """
+    _target_station: str
+    _msg_type: PacketType
+    _message: str
+    _direction: MessageDirection
+    _timestamp: datetime
 
     def __init__(self, target_station: str, msg_type: PacketType, message: str,
-                 direction: MessageDirection = MessageDirection.IN):
+                 direction: MessageDirection = ...) -> None:
         """
         Constructor for AcarsMessage class
         Args:
@@ -32,32 +35,22 @@ class AcarsMessage:
             message (str): raw message
             direction (MessageDirection): direction of message
         """
-        self._target_station = target_station
-        self._msg_type = msg_type
-        self._message = message
-        self._direction = direction
-        self._timestamp = datetime.now()
+        ...
 
     @property
-    def target_station(self) -> str: return self._target_station
+    def target_station(self) -> str: ...
 
     @property
-    def msg_type(self) -> PacketType: return self._msg_type
+    def msg_type(self) -> PacketType: ...
 
     @property
-    def message(self) -> str: return self._message
+    def message(self) -> str: ...
 
     @property
-    def direction(self) -> MessageDirection: return self._direction
+    def direction(self) -> MessageDirection: ...
 
     @property
-    def timestamp(self) -> datetime: return self._timestamp
+    def timestamp(self) -> datetime: ...
 
     @property
-    def hash(self) -> str:
-        return md5(f"{self._target_station}{self._message}{self._timestamp.timestamp()}".encode("UTF-8")).hexdigest()
-
-    def __str__(self) -> str:
-        return f"AcarsMessage(From: {self._target_station}, Type: {self._msg_type}, Message: {self._message})"
-
-    def __repr__(self) -> str: return str(self)
+    def hash(self) -> str: ...

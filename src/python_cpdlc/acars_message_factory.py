@@ -1,4 +1,4 @@
-from re import compile
+from re import compile, Pattern
 
 from .acars_message import AcarsMessage
 from .cpdlc_message import CPDLCMessage
@@ -6,14 +6,26 @@ from .enums import PacketType
 
 
 class AcarsMessageFactory:
-    split_pattern = compile(r"\{[\s\S]*?\{[\s\S]*?}}|\{[\s\S]*?}")
-    data_pattern = compile(r"\{[\s\S]*?}")
+    """
+    AcarsMessageFactory is used to create AcarsMessage objects.
+
+    Attributes:
+        split_pattern (re.Pattern): A compiled regex pattern used to split the message text.
+        data_pattern (re.Pattern): A compiled regex pattern used to parse the message text.
+    """
+    split_pattern: Pattern = compile(r"\{[\s\S]*?\{[\s\S]*?}}|\{[\s\S]*?}")
+    data_pattern: Pattern = compile(r"\{[\s\S]*?}")
 
     @staticmethod
     def parser_message(text: str) -> list[AcarsMessage]:
         """
-        parse acars message
-        :param text: acars message
+        Parse the message text and return a list of AcarsMessage objects.
+
+        Args:
+            text (str): The raw message text.
+
+        Returns:
+            list[AcarsMessage]: List of AcarsMessage objects.
         """
         result: list["AcarsMessage"] = []
         messages = AcarsMessageFactory.split_pattern.findall(text)

@@ -29,6 +29,11 @@ classifiers = [
     "Natural Language :: English",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.17.0",
+]
+
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
