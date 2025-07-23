@@ -318,18 +318,6 @@ class CPDLC:
 
     # Callback functions
 
-    @staticmethod
-    def _safe_callback_execution(callback: Callable, *args):
-        """
-        Callback executor, for internal use only
-        Args:
-            callback (Callable[[AcarsMessage], None]): callback
-        """
-        try:
-            callback(*args)
-        except Exception as e:
-            logger.error(f"Exception occurred while calling callback: {e}")
-
     def listen_message_receiver(self):
         """
         Add callback to receive message
@@ -354,9 +342,16 @@ class CPDLC:
         Args:
             message (str): message
         """
+
+        def _safe_callback_execution(cb: Callable[[AcarsMessage], None]) -> None:
+            try:
+                cb(message)
+            except Exception as e:
+                logger.error(f"Exception occurred while calling callback: {e}")
+
         logger.trace(f"Message received : {message}")
         for callback in self._message_receiver_callbacks:
-            self._callback_executor.submit(lambda arg: self._safe_callback_execution(*arg), (callback, message))
+            self._callback_executor.submit(_safe_callback_execution, callback)
 
     def listen_message_sender(self):
         """
@@ -383,9 +378,16 @@ class CPDLC:
             to (str): message send to
             message (str): message
         """
+
+        def _safe_callback_execution(cb: Callable[[str, str], None]) -> None:
+            try:
+                cb(to, message)
+            except Exception as e:
+                logger.error(f"Exception occurred while calling callback: {e}")
+
         logger.trace(f"Message send to {to}: {message}")
         for callback in self._message_sender_callbacks:
-            self._callback_executor.submit(lambda arg: self._safe_callback_execution(*arg), (callback, to, message))
+            self._callback_executor.submit(_safe_callback_execution, callback)
 
     # Decorators
 

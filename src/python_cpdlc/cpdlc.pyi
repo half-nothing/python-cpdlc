@@ -255,13 +255,6 @@ class CPDLC:
         """
         ...
 
-    @staticmethod
-    def _safe_callback_execution(callback: Callable, *args):
-        """
-        Callback executor, for internal use only
-        """
-        ...
-
     def listen_message_receiver(self):
         """
         Add callback to receive message
