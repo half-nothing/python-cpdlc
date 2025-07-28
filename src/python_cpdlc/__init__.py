@@ -4,7 +4,7 @@ from .acars_message import AcarsMessage
 from .cpdlc_message import CPDLCMessage
 from .cpdlc import CPDLC
 
-__version__ = "1.3.6"
+__version__ = "1.3.8"
 
 __ALL__ = [
     "AcarsMessage",

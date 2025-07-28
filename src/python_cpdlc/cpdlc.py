@@ -552,11 +552,15 @@ class CPDLC:
         if element is None:
             logger.error(f"Change network failed, wrong response")
             raise ResponseParserError()
-        changed_network = element.text.split(" ")[-1].removesuffix(".")
-        if changed_network != new_network.value:
-            logger.error(f"Change network failed. Expected {new_network.value}, got {changed_network}")
+        element = soup.find("select", attrs={"name": "network"})
+        if element is None:
+            logger.error(f"Login code or email is invalid, please check login code or email")
+            raise LoginError()
+        selected = element.find("option", attrs={"selected": ""})
+        if selected.text != new_network.value:
+            logger.error(f"Change network failed. Expected {new_network.value}, got {selected.text}")
             raise NetworkSwitchError(self._network, new_network)
-        self._network = new_network
+        self._network = Network(selected.text)
         logger.debug(f"Network changed to {new_network.value}")
         return True
 
